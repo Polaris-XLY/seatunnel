@@ -21,12 +21,14 @@ import org.apache.seatunnel.api.table.catalog.Column;
 import org.apache.seatunnel.api.table.catalog.TableSchema;
 import org.apache.seatunnel.api.table.converter.BasicTypeDefine;
 import org.apache.seatunnel.connectors.seatunnel.paimon.config.PaimonSinkConfig;
+import org.apache.seatunnel.connectors.seatunnel.paimon.config.PaimonSinkOptions;
 import org.apache.seatunnel.connectors.seatunnel.paimon.data.PaimonTypeMapper;
 import org.apache.seatunnel.connectors.seatunnel.paimon.exception.PaimonConnectorErrorCode;
 import org.apache.seatunnel.connectors.seatunnel.paimon.exception.PaimonConnectorException;
 
 import org.apache.paimon.CoreOptions;
 import org.apache.paimon.schema.Schema;
+import org.apache.paimon.shade.org.apache.commons.lang.StringUtils;
 import org.apache.paimon.types.DataField;
 import org.apache.paimon.types.DataType;
 
@@ -44,11 +46,16 @@ public class SchemaUtil {
     }
 
     public static Schema toPaimonSchema(
-            TableSchema tableSchema, PaimonSinkConfig paimonSinkConfig) {
+            TableSchema tableSchema, PaimonSinkConfig paimonSinkConfig, String comment) {
         Schema.Builder paiSchemaBuilder = Schema.newBuilder();
         for (int i = 0; i < tableSchema.getColumns().size(); i++) {
             Column column = tableSchema.getColumns().get(i);
-            paiSchemaBuilder.column(column.getName(), toPaimonType(column));
+            if (StringUtils.isNotBlank(column.getComment())) {
+                paiSchemaBuilder.column(
+                        column.getName(), toPaimonType(column), column.getComment());
+            } else {
+                paiSchemaBuilder.column(column.getName(), toPaimonType(column));
+            }
         }
         List<String> primaryKeys = paimonSinkConfig.getPrimaryKeys();
         if (primaryKeys.isEmpty() && Objects.nonNull(tableSchema.getPrimaryKey())) {
@@ -64,10 +71,13 @@ public class SchemaUtil {
         Map<String, String> writeProps = paimonSinkConfig.getWriteProps();
         CoreOptions.ChangelogProducer changelogProducer = paimonSinkConfig.getChangelogProducer();
         if (changelogProducer != null) {
-            writeProps.remove(PaimonSinkConfig.CHANGELOG_TMP_PATH);
+            writeProps.remove(PaimonSinkOptions.CHANGELOG_TMP_PATH);
         }
         if (!writeProps.isEmpty()) {
             paiSchemaBuilder.options(writeProps);
+        }
+        if (StringUtils.isNotBlank(comment)) {
+            paiSchemaBuilder.comment(comment);
         }
         return paiSchemaBuilder.build();
     }
